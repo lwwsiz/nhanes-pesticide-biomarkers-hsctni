@@ -1,0 +1,50 @@
+{
+  "dataset_rows": 1296,
+  "cycles": {
+    "2001-2002": 740,
+    "1999-2000": 556
+  },
+  "primary_results": [
+    {
+      "cycle": "2001-2002",
+      "n": 740,
+      "design_df": 15.0,
+      "beta": 0.13869301967577746,
+      "se": 0.038122714405597176,
+      "t": 3.6380677986406593,
+      "p": 0.0024285206928910913,
+      "ci_low": 0.05743637738046237,
+      "ci_high": 0.21994966197109256,
+      "z": NaN
+    },
+    {
+      "cycle": "1999-2000",
+      "n": 556,
+      "design_df": 14.0,
+      "beta": 0.09707225755094545,
+      "se": 0.04191247866722795,
+      "t": 2.3160705507700703,
+      "p": 0.036228364850320195,
+      "ci_low": 0.007178931247836098,
+      "ci_high": 0.18696558385405482,
+      "z": NaN
+    },
+    {
+      "cycle": "descriptive pooled estimate",
+      "n": 1296,
+      "design_df": NaN,
+      "beta": 0.11984902368789592,
+      "se": 0.02820167041093526,
+      "t": NaN,
+      "p": 2.140439668334132e-05,
+      "ci_low": 0.06457476537859391,
+      "ci_high": 0.17512328199719793,
+      "z": 4.249713649636306
+    }
+  ],
+  "notes": [
+    "Cycle-specific models use Taylor-linearized PSU-level sandwich variance.",
+    "The pooled row is a descriptive inverse-variance summary, not a meta-analysis.",
+    "The two official weights are evaluated separately and are never multiplied."
+  ]
+}
