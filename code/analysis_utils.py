@@ -26,6 +26,8 @@ def _invert_full_rank(matrix: np.ndarray) -> np.ndarray:
     array = np.asarray(matrix, dtype=float)
     if array.ndim != 2 or array.shape[0] != array.shape[1]:
         raise ValueError("matrix must be square")
+    if array.size == 0 or not np.isfinite(array).all():
+        raise ValueError("matrix must be nonempty and finite")
     size = array.shape[0]
     augmented = np.concatenate([array.copy(), np.eye(size)], axis=1)
     tolerance = max(float(np.max(np.abs(array))), 1.0) * 1e-12
@@ -94,12 +96,22 @@ def _regularized_incomplete_beta(a: float, b: float, x: float) -> float:
 
 
 def _two_sided_t_p(t_value: float, degrees_of_freedom: int) -> float:
+    if degrees_of_freedom <= 0 or not math.isfinite(degrees_of_freedom):
+        raise ValueError("degrees of freedom must be positive and finite")
+    if not math.isfinite(t_value):
+        raise ValueError("t statistic must be finite")
     x = degrees_of_freedom / (degrees_of_freedom + t_value**2)
     return float(_regularized_incomplete_beta(degrees_of_freedom / 2.0, 0.5, x))
 
 
 def _t_critical(degrees_of_freedom: int, alpha: float = 0.05) -> float:
+    if not 0.0 < alpha < 1.0:
+        raise ValueError("alpha must be between zero and one")
     low, high = 0.0, 12.0
+    while _two_sided_t_p(high, degrees_of_freedom) > alpha:
+        high *= 2.0
+        if high > 1e12:
+            raise ArithmeticError("could not bracket t critical value")
     for _ in range(80):
         midpoint = (low + high) / 2.0
         if _two_sided_t_p(midpoint, degrees_of_freedom) > alpha:
@@ -136,6 +148,13 @@ def survey_linear_regression(
     weight: str = "WTSPP2YR",
 ) -> dict:
     covariates = BASE_COVARIATES if covariates is None else covariates
+    if not frame.columns.is_unique:
+        raise ValueError("input column names must be unique")
+    names = ['intercept', term, 'age10', 'age10_sq', 'female'] + [c.lower() for c in covariates]
+    if len(set(names)) != len(names):
+        raise ValueError("design term names must be unique")
+    if not np.isfinite(frame[weight].to_numpy(float)).all() or (frame[weight] <= 0).any():
+        raise ValueError("survey weights must be finite and strictly positive")
     required = [
         outcome,
         term,
@@ -147,13 +166,24 @@ def survey_linear_regression(
         "SDMVPSU",
         *covariates,
     ]
+    if len(set(required)) != len(required):
+        raise ValueError("outcome, exposure, covariates and design identifiers must be distinct")
     data = (
         frame[required]
         .replace([np.inf, -np.inf], np.nan)
         .dropna()
         .reset_index(drop=True)
     )
+    if data.empty:
+        raise ValueError("no complete observations")
+    cluster_counts = data.groupby('SDMVSTRA')['SDMVPSU'].nunique()
+    if (cluster_counts < 2).any():
+        raise ValueError("singleton PSU stratum: specify a survey-design policy before fitting")
     design = _design(data, term, covariates)
+    if not design.columns.is_unique:
+        raise ValueError("design column names must be unique")
+    if len(data) <= design.shape[1]:
+        raise ValueError("insufficient observations for full-rank design")
     x = design.to_numpy(float)
     y = data[outcome].to_numpy(float)
     w = (data[weight] / data[weight].mean()).to_numpy(float)
@@ -172,7 +202,7 @@ def survey_linear_regression(
         in_stratum = strata == stratum
         stratum_psus = np.unique(psu[in_stratum])
         if len(stratum_psus) < 2:
-            continue
+            raise ValueError("singleton PSU stratum")
         n_strata += 1
         n_psu += len(stratum_psus)
         totals = []
@@ -202,6 +232,8 @@ def survey_linear_regression(
     index = list(design.columns).index(term)
     estimate = float(beta[index])
     standard_error = float(math.sqrt(max(covariance[index, index], 0.0)))
+    if not math.isfinite(standard_error) or standard_error <= 0:
+        raise ArithmeticError("standard error must be positive and finite")
     t_value = estimate / standard_error
     critical = _t_critical(design_df)
     return {
